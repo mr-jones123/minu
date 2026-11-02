@@ -1,0 +1,21 @@
+[project]
+name = "minu"
+version = "0.1.0"
+description = "Tiny agent harness for local models (llama.cpp, MLX, Ollama)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["textual>=1.0", "textual-image>=0.8"]
+
+[project.optional-dependencies]
+mlx = ["mlx-lm"]
+
+[project.scripts]
+minu = "minu.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["minu"]
+package-dir = { minu = "src" }

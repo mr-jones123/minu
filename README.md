@@ -2,6 +2,8 @@
 
 A very small agent harness for local models. One tool (`sh`) and a system prompt of about 86 tokens.
 
+![minu reading and summarizing a freshly cloned repo with LFM3-1.7B](assets/demo.gif)
+
 ```
 uv tool install minu              # or: pipx install minu   (needs Python 3.13; uv fetches it for you)
 minu                              # run it in any project folder
@@ -73,6 +75,7 @@ git clone https://github.com/mr-jones123/minu && cd minu
 uv tool install -e .              # global `minu` that runs your checkout (changes to src/ apply right away)
 uv run minu                       # or run it from the repo
 uv build                          # sdist + wheel into dist/
+vhs assets/demo.tape              # re-record the README gif (brew install vhs)
 ```
 
 ## Releasing to PyPI

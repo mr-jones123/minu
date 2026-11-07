@@ -46,12 +46,13 @@ Image files the model mentions in its answer are shown too, and `/view path.png`
 Images render as real pixels in Kitty, Ghostty, WezTerm and iTerm2, and as colored blocks in other terminals.
 
 ## Sessions
-Each chat is saved to `.minu/sessions/<timestamp>.jsonl` in the folder you start minu from, one message per line.
-`.minu/` gets its own `.gitignore`, so sessions are never committed.
+Each chat is saved to `~/.minu/sessions/<project>/<timestamp>.jsonl` (one folder per project path, e.g.
+`-Users-me-code-app`): a `{"meta": …}` line, then one message per line. Set `MINU_HOME` to move `~/.minu`.
+Sessions from older versions in `./.minu/sessions` still show up in `/resume`.
 `/resume` opens a session picker · `minu -c` continues the latest one · `minu -r FILE` opens a specific file · `/new` (or `ctrl+n`) starts a new session.
 
 ## Keys
-`enter` send · `ctrl+j` newline · `ctrl+o` model · `ctrl+y` auto-run · `esc` stop · `ctrl+n` new session · `ctrl+q` quit
+`enter` send · `ctrl+j` newline · `ctrl+o` model · `ctrl+y` auto-run · `esc` stop · `ctrl+n` new session · `ctrl+c` quit
 Type `/` for a menu of commands (↑/↓ to move, tab to complete, enter to run, esc to close):
 `/new` `/model` `/resume` `/search <query>` `/fetch <url>` `/view <img>` `/auto` `/clear` `/exit`
 
@@ -60,7 +61,7 @@ The model can search on its own (`minu-search "q"`, `minu-fetch URL` in its shel
 `/search <query>` gets results and the model answers from them; `/fetch <url>` reads a page and the model summarizes it.
 Search tries DuckDuckGo first, then Wikipedia's API. DuckDuckGo sometimes rate-limits; for search that never gets blocked,
 point minu at your own SearXNG instance: `MINU_SEARXNG=http://localhost:8888`.
-Env: `MINU_CTX` (llama.cpp context, default 16384), `OLLAMA_HOST`, `HF_HOME`. Server log: `~/.cache/minu/server.log`.
+Env: `MINU_CTX` (llama.cpp context, default 16384), `MINU_HOME` (default `~/.minu`), `OLLAMA_HOST`, `HF_HOME`. Server log: `~/.cache/minu/server.log`.
 
 ## Code layout (`src/`, installed as the `minu` package)
 | file | what it does |
@@ -70,7 +71,7 @@ Env: `MINU_CTX` (llama.cpp context, default 16384), `OLLAMA_HOST`, `HF_HOME`. Se
 | `app.py` | the TUI: layout, status bar, input handling |
 | `agent.py` | agent loop: stream a reply, run its command, send the output back |
 | `model_flows.py` | model picker, HF/Ollama downloads, install offers, loading |
-| `sessions.py` | saving and resuming `.minu/sessions/*.jsonl` |
+| `sessions.py` | saving and resuming `~/.minu/sessions/<project>/*.jsonl` |
 | `server.py` | starting llama-server / mlx_lm / Ollama and streaming chat |
 | `models.py` | finding local models and searching Hugging Face |
 | `tools.py` | the `sh` tool, web search/fetch, parsing commands from replies |

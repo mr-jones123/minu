@@ -6,7 +6,7 @@ from textual.widgets import Markdown
 
 from .config import BLOCK, STEPS
 from .images import mentioned_images
-from .tools import fetch, search, sh, strip_think, to_cmd
+from .tools import fetch, search, sh, split_think, to_cmd
 
 
 class AgentMixin:
@@ -52,26 +52,49 @@ class AgentMixin:
         s.busy = False; s.set_state("")
 
     def step(s):
-        md = s.ui(s.add, Markdown(""))
-        raw, calls, last, block = "", {}, 0.0, None
-        s.set_state("thinking…")
+        md = think_box = think_w = None
+        raw, reasoning, calls, block = "", "", {}, None
+        last, first, think_t, n, final_tps = 0.0, None, None, 0, None
+        s.set_state("waiting…")
         for ch in s.srv.stream(s.msgs, s.native, s.stop_ev):
-            if u := ch.get("usage"): s.used = u.get("total_tokens") or u.get("prompt_tokens", 0) + u.get("completion_tokens", 0)
+            if u := ch.get("usage"):
+                s.used = u.get("total_tokens") or u.get("prompt_tokens", 0) + u.get("completion_tokens", 0)
+                if u.get("completion_tokens") and first: final_tps = u["completion_tokens"] / max(time.time() - first, 1e-3)
+            if (tm := ch.get("timings")) and tm.get("predicted_per_second"): final_tps = tm["predicted_per_second"]  # llama.cpp
             if not ch.get("choices"): continue
             d = ch["choices"][0].get("delta") or {}
-            raw += d.get("content") or ""
+            piece, rpiece = d.get("content") or "", d.get("reasoning_content") or d.get("reasoning") or ""
+            raw += piece; reasoning += rpiece
             for tc in d.get("tool_calls") or []:
                 c = calls.setdefault(tc.get("index", 0), {"id": "", "name": "", "args": ""})
                 f = tc.get("function") or {}
                 c["id"] = tc.get("id") or c["id"]; c["name"] += f.get("name") or ""; c["args"] += f.get("arguments") or ""
-            text = strip_think(raw)
+            if piece or rpiece or d.get("tool_calls"):
+                n += 1; first = first or time.time()
+            think, text = s.split(reasoning, raw)
             if not s.native and (block := BLOCK.search(text)):
                 break
-            if time.time() - last > 0.1 and text:
-                s.ui(md.update, text); s.set_state("writing…"); last = time.time()
-        text = strip_think(raw)
+            if time.time() - last > 0.08:
+                last = time.time()
+                if n > 1: s.tps = (n - 1) / max(last - first, 1e-3)  # ~1 token per streamed chunk
+                if think:
+                    think_t = think_t or time.time()
+                    if not think_box: think_box, think_w = s.ui(s.add_think)
+                    s.ui(s.render, think_w, think)
+                if text:
+                    if not md: md = s.ui(s.add, Markdown(""))
+                    if think_box and not think_box.collapsed: s.ui(s.end_think, think_box, time.time() - think_t)
+                    s.ui(s.render, md, text)
+                s.set_state("writing…" if text else "thinking…" if think else "waiting…")
+        think, text = s.split(reasoning, raw)
         if block: text = text[:block.end()]
-        s.ui(md.update, text or ("" if calls else "_(empty)_"))
+        if final_tps: s.tps = final_tps
+        if think:
+            if not think_box: think_box, think_w = s.ui(s.add_think)
+            s.ui(s.render, think_w, think); s.ui(s.end_think, think_box, time.time() - (think_t or first or time.time()))
+        if text or not calls:
+            if not md: md = s.ui(s.add, Markdown(""))
+            s.ui(s.render, md, text or "_(empty)_")
         if s.stop_ev.is_set():
             s.push({"role": "assistant", "content": text}); s.say("▸ stopped"); return True
         if calls:
@@ -89,3 +112,8 @@ class AgentMixin:
             return s.stop_ev.is_set()
         for p in mentioned_images(text): s.ui(s.show_image, p)
         return True
+
+    @staticmethod
+    def split(reasoning, raw):  # reasoning field (llama.cpp/Ollama) + inline <think> tags -> (thinking, answer)
+        think, text = split_think(raw)
+        return "\n".join(x for x in (reasoning.strip(), think) if x), text

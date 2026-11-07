@@ -8,6 +8,7 @@ OLLAMA = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA = OLLAMA if OLLAMA.startswith("http") else "http://" + OLLAMA
 CTX = int(os.environ.get("MINU_CTX", 16384))
 DIR = HOME / ".cache/minu"
+MINU_HOME = Path(os.environ.get("MINU_HOME") or HOME / ".minu").expanduser()  # sessions live here
 OUT_MAX, STEPS = 4000, 25
 MLX_OK = platform.system() == "Darwin" and platform.machine() == "arm64"
 IMG_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")

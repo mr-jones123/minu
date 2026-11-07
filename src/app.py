@@ -1,17 +1,18 @@
 """The minu TUI: layout, status bar, input handling."""
-import subprocess, threading, time, re
+import os, subprocess, threading, time, re
 
 from pathlib import Path
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.widgets import OptionList, Static
+from textual.widgets import Collapsible, OptionList, Static
 
 from .agent import AgentMixin
 from .config import BANNER, COMMANDS, SYSTEM, SYSTEM_NATIVE
 from .images import encode_image, find_images, image_widget
 from .model_flows import ModelFlowsMixin
-from .server import Server
+from .server import Server, kill_children
 from .sessions import SessionsMixin
 from .tools import sh_env
 from .widgets import Prompt
@@ -27,6 +28,10 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
     .sys { color: $text-muted; text-style: italic; }
     .img { width: auto; height: 14; margin: 0 2; }
     Markdown { margin: 0; padding: 0; }
+    .think-box { background: transparent; border: none; padding: 0; margin: 1 0 0 0; }
+    .think-box > Contents { padding: 0 0 0 2; }
+    .think-box CollapsibleTitle { color: $text-muted; padding: 0; }
+    .think { color: $text-muted; text-style: italic; }
     #prompt { height: auto; min-height: 5; max-height: 12; border: round $accent; padding: 0 1; background: $surface; }
     #prompt:focus { border: round $accent-lighten-2; }
     #prompt > .text-area--cursor-line { background: transparent; }
@@ -34,14 +39,15 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
     #slash { height: auto; max-height: 11; border: round $accent; background: $surface; display: none; padding: 0 1; }
     """
     BINDINGS = [("ctrl+o", "pick", "model"), ("ctrl+y", "auto", "auto-run"),
-                ("escape", "halt", "stop"), ("ctrl+l", "clear", "clear"), ("ctrl+n", "clear", "new session")]
+                ("escape", "halt", "stop"), ("ctrl+l", "clear", "clear"), ("ctrl+n", "clear", "new session"),
+                Binding("ctrl+c", "quit", "quit", show=False, priority=True)]  # beats TextArea's ctrl+c copy
 
     def __init__(s, start=None, auto=False, native=False, resume=None):
         super().__init__()
         s.resume_path = resume
         s.srv, s.start_with, s.auto, s.native = Server(), start, auto, native
         s.msgs = [{"role": "system", "content": SYSTEM_NATIVE if native else SYSTEM}]
-        s.used, s.busy, s.state, s.ollama_proc, s.session = 0, False, "", None, None
+        s.used, s.busy, s.state, s.ollama_proc, s.session, s.tps = 0, False, "", None, None, None
         s.stop_ev, s.ok_ev, s.ok, s.pending = threading.Event(), threading.Event(), False, False
 
     def compose(s) -> ComposeResult:
@@ -70,13 +76,26 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
     def status(s):
         ctx = f"{s.used}/{s.srv.ctx}" if s.srv.ctx else str(s.used)
         st = f" · {s.state}" if s.state else ""
+        tps = f" · {s.tps:.1f} tok/s" if s.tps else ""
         s.query_one("#status", Static).update(
-            f"{s.srv.name} · {ctx} tok · auto {'on' if s.auto else 'off'}{st}   ^o model ^y auto esc stop")
+            f"{s.srv.name} · {ctx} tok{tps} · auto {'on' if s.auto else 'off'}{st}   ^o model ^y auto esc stop ^c quit")
 
     def add(s, w):
         s.query_one("#banner").display = False
         log = s.query_one("#log"); log.display = True
-        log.mount(w); log.scroll_end(animate=False); return w
+        log.mount(w); s.call_after_refresh(log.scroll_end, animate=False); return w
+
+    async def render(s, w, text):  # update a streaming widget; follow the bottom unless the user scrolled up
+        log = s.query_one("#log"); pinned = log.max_scroll_y - log.scroll_y <= 3
+        if (r := w.update(text)) is not None: await r
+        if pinned: s.call_after_refresh(log.scroll_end, animate=False)
+
+    def add_think(s):  # live reasoning, shown in the chat and folded away once the answer starts
+        body = Static("", classes="think", markup=False)
+        box = s.add(Collapsible(body, title="thinking…", collapsed=False, classes="think-box"))
+        return box, body
+
+    def end_think(s, box, secs): box.title, box.collapsed = f"thought for {secs:.1f}s", True
 
     def note(s, text, cls="sys"): return s.add(Static(text, classes=cls, markup=False))
 
@@ -91,6 +110,12 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
     def set_state(s, text): s.state = text; s.ui(s.status)
 
     # ---- actions
+    def action_quit(s):  # unblock worker threads first, or the app hangs on exit waiting for them
+        s.stop_ev.set(); s.ok, s.pending = False, False; s.ok_ev.set(); s.srv.abort()
+        t = threading.Timer(4, lambda: (kill_children(), os._exit(0))); t.daemon = True  # last resort if a thread is still stuck
+        t.start()
+        s.exit()
+
     def action_auto(s): s.auto = not s.auto; s.status()
     def action_halt(s):
         s.stop_ev.set()
@@ -98,7 +123,7 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
 
     def action_clear(s):
         if s.busy: return s.notify("busy, press esc first")
-        s.msgs = s.msgs[:1]; s.used = 0; s.session = None
+        s.msgs = s.msgs[:1]; s.used = 0; s.session = None; s.tps = None
         log = s.query_one("#log"); log.remove_children(); log.display = False
         s.query_one("#banner").display = True; s.status()
 
@@ -161,7 +186,7 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
         if text in ("/new", "/clear"): return s.action_clear()
         if text == "/auto": return s.action_auto()
         if text == "/resume": return s.pick_session()
-        if text in ("/exit", "/quit", "/q"): return s.exit()
+        if text in ("/exit", "/quit", "/q"): return s.action_quit()
         if text.startswith("/view"):
             imgs = find_images(text[5:])
             return [s.show_image(p) for p in imgs] if imgs else s.notify("no image file at that path")

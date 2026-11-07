@@ -24,7 +24,11 @@ def free_port():
         s.bind(("127.0.0.1", 0)); return s.getsockname()[1]
 
 class Server:
-    def __init__(s): s.proc, s.url, s.model, s.name, s.kind, s.ctx = None, None, None, "no model", None, None
+    def __init__(s): s.proc, s.url, s.model, s.name, s.kind, s.ctx, s.resp = None, None, None, "no model", None, None, None
+
+    def abort(s):  # unblock a thread stuck reading the stream (used on quit)
+        try: s.resp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+        except Exception: pass
 
     def stop(s):
         if s.proc and s.proc.poll() is None:
@@ -70,6 +74,7 @@ class Server:
         try: r = urllib.request.urlopen(req, timeout=900)
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"{e.code}: {e.read().decode(errors='replace')[:400]}") from None
+        s.resp = r
         with r:
             for line in r:
                 if stop.is_set(): return

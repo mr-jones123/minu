@@ -2,7 +2,7 @@
 import argparse, os, signal, sys
 
 from . import images
-from .sessions import SESS
+from .sessions import session_files
 from .tools import fetch, search, shims
 
 
@@ -20,7 +20,7 @@ def main():
     g.add_argument("--url", help="existing OpenAI-compatible server")
     ap.add_argument("-y", "--auto", action="store_true", help="run commands without asking")
     ap.add_argument("--native", action="store_true", help="use native tool calls instead of ```sh blocks")
-    ap.add_argument("-c", "--continue", dest="cont", action="store_true", help="continue the latest session in .minu/")
+    ap.add_argument("-c", "--continue", dest="cont", action="store_true", help="continue the latest session for this folder")
     ap.add_argument("-r", "--resume", metavar="FILE", help="resume a session .jsonl")
     a = ap.parse_args()
     start = None
@@ -37,12 +37,12 @@ def main():
     except Exception: images.IMAGES = False  # odd terminal: show image names instead of pixels
     resume = a.resume
     if a.cont:
-        latest = sorted(SESS.glob("*.jsonl"))
-        resume = latest[-1] if latest else None
-        if not resume: print("no sessions in .minu/ yet")
+        latest = session_files()
+        resume = latest[0] if latest else None
+        if not resume: print("no saved sessions for this folder yet")
     from .app import Minu  # imported late so `minu search|fetch` stay fast
     from .server import kill_children
     app = Minu(start, a.auto, a.native, resume)
-    signal.signal(signal.SIGTERM, lambda *_: app.exit())
+    signal.signal(signal.SIGTERM, lambda *_: app.action_quit())
     signal.signal(signal.SIGHUP, lambda *_: (kill_children(), os._exit(1)))  # terminal closed
     app.run()

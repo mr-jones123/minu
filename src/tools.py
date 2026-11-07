@@ -89,6 +89,12 @@ def to_cmd(m):  # ```sh block, or a model's own <tool_call> / JSON call -> shell
         return str(args.get("command") or next(iter(args.values()), ""))
     return " ".join([name, *(shlex.quote(str(v)) for v in args.values())])
 
-def strip_think(t):
-    t = re.sub(r"<think>.*?</think>", "", t, flags=re.S)
-    return t.split("<think>")[0].strip()
+def split_think(t):  # reply -> (thinking, answer); handles an unclosed <think> while streaming
+    head = t.split("</think>")[0]
+    if "</think>" in t and "<think>" not in head: t = "<think>" + t  # chat template already opened <think>
+    think = "".join(re.findall(r"<think>(.*?)</think>", t, re.S))
+    rest = re.sub(r"<think>.*?</think>", "", t, flags=re.S)
+    if "<think>" in rest: rest, tail = rest.split("<think>", 1); think += tail
+    return think.strip(), rest.strip()
+
+def strip_think(t): return split_think(t)[1]

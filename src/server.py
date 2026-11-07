@@ -24,7 +24,7 @@ def free_port():
         s.bind(("127.0.0.1", 0)); return s.getsockname()[1]
 
 class Server:
-    def __init__(s): s.proc, s.url, s.model, s.name, s.kind, s.ctx, s.resp = None, None, None, "no model", None, None, None
+    def __init__(s): s.proc, s.url, s.model, s.name, s.kind, s.ctx, s.resp, s.ref = None, None, None, "no model", None, None, None, None
 
     def abort(s):  # unblock a thread stuck reading the stream (used on quit)
         try: s.resp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
@@ -38,7 +38,7 @@ class Server:
         s.proc, s.url = None, None
 
     def start(s, kind, ref):
-        s.stop(); s.ctx, s.kind = None, kind
+        s.stop(); s.ctx, s.kind, s.ref = None, kind, ref
         if kind == "ollama":
             s.url, s.model, s.name = f"{OLLAMA}/v1", ref, ref; return
         if kind == "url":

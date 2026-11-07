@@ -25,6 +25,10 @@ Then run `minu` in any project folder. To uninstall: `uv tool uninstall minu`.
 - **⬇ pull from Ollama**: any name from ollama.com/library, with progress shown in the status bar.
 
 Switching models stops the old server and starts the new one. The chat stays.
+
+**✕ delete a model** (in the picker, or `/delete`) lists your downloaded models with their size on disk. It asks before
+deleting (the default is "keep it"). For GGUF it removes that quant, plus the whole repo (mmproj, cache entry) once
+no weights are left in it; MLX repos are removed whole; Ollama models go through `ollama`'s API. A loaded model is stopped first.
 `esc` cancels a download.
 
 If something is missing, minu offers to install it (it always asks first):
@@ -54,7 +58,7 @@ Sessions from older versions in `./.minu/sessions` still show up in `/resume`.
 ## Keys
 `enter` send · `ctrl+j` newline · `ctrl+o` model · `ctrl+y` auto-run · `esc` stop · `ctrl+n` new session · `ctrl+c` quit
 Type `/` for a menu of commands (↑/↓ to move, tab to complete, enter to run, esc to close):
-`/new` `/model` `/resume` `/search <query>` `/fetch <url>` `/view <img>` `/auto` `/clear` `/exit`
+`/new` `/model` `/delete` `/resume` `/search <query>` `/fetch <url>` `/view <img>` `/auto` `/clear` `/exit`
 
 ## Web
 The model can search on its own (`minu-search "q"`, `minu-fetch URL` in its shell). You can also do it yourself:

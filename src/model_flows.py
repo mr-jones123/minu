@@ -7,7 +7,7 @@ from textual import work
 from .config import MLX_OK, OLLAMA
 from .installs import install_cmd, which
 from .server import spawn
-from .models import discover, hf_files, hf_search, ollama_up
+from .models import delete_model, deletable, discover, gb, hf_files, hf_search, ollama_up
 from .widgets import Ask, Picker
 
 
@@ -17,7 +17,8 @@ class ModelFlowsMixin:
         if which("ollama") and not await asyncio.to_thread(ollama_up):
             await asyncio.to_thread(s.start_ollama)
         items = [("⬇  download from Hugging Face…", ("dl-hf", None)),
-                 ("⬇  pull from Ollama…", ("dl-ollama", None))] + await asyncio.to_thread(discover)
+                 ("⬇  pull from Ollama…", ("dl-ollama", None)),
+                 ("✕  delete a model…", ("delete", None))] + await asyncio.to_thread(discover)
         choice = await s.push_screen_wait(Picker("models", items))
         if not choice: return
         kind, ref = choice
@@ -26,8 +27,34 @@ class ModelFlowsMixin:
             if name: s.pull_ollama(name)
         elif kind == "dl-hf":
             await s.hf_flow()
+        elif kind == "delete":
+            await s.delete_flow()
         else:
             s.load(kind, ref)
+
+    @work(exclusive=True, group="pick")
+    async def action_delete(s): await s.delete_flow()
+
+    async def delete_flow(s):
+        items = await asyncio.to_thread(deletable)
+        if not items: return s.notify("no downloaded models to delete")
+        total = sum(i[1][3] for i in items)
+        choice = await s.push_screen_wait(Picker(f"delete a model ({gb(total)} on disk)", items))
+        if not choice: return
+        kind, ref, name, size = choice
+        loaded = s.srv.url and s.srv.kind == kind and s.srv.ref == ref
+        if loaded and s.busy: return s.notify("that model is busy, press esc first")
+        warn = "  (it's loaded; it will be stopped)" if loaded else ""
+        if not await s.push_screen_wait(Picker(f"delete {name}?{warn}", [("no, keep it", False), (f"yes, delete it and free {gb(size)}", True)])):
+            return
+        try:
+            if loaded:
+                await asyncio.to_thread(s.srv.stop); s.srv.name = "no model"; s.tps = None
+            gone = await asyncio.to_thread(delete_model, kind, ref)
+            s.note(f"▸ deleted {gone}, freed {gb(size)}")
+        except Exception as e:
+            s.note(f"▸ couldn't delete {name}: {e}")
+        s.status()
 
     async def hf_flow(s):
         q = await s.push_screen_wait(Ask("Search Hugging Face, or paste org/repo", "e.g. qwen3 gguf, gemma 3 mlx, ggml-org/SmolVLM-256M-Instruct-GGUF"))

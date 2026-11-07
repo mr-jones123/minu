@@ -25,6 +25,7 @@ SYSTEM_NATIVE = (f"You are minu, a terse coding agent {ENV}. Use the sh tool to 
 COMMANDS = [  # shown in the / menu: (command, argument, description)
     ("/new", "", "start a new session"),
     ("/model", "", "pick or download a model"),
+    ("/delete", "", "delete a downloaded model to free disk space"),
     ("/resume", "", "open a saved session"),
     ("/search", "<query>", "search the web, the model answers from the results"),
     ("/fetch", "<url>", "read a web page, the model summarizes it"),

@@ -183,6 +183,7 @@ class Minu(ModelFlowsMixin, SessionsMixin, AgentMixin, App):
             inp.placeholder = "ask minu…"; s.ok_ev.set(); return
         if not text: return
         if text == "/model": return s.action_pick()
+        if text == "/delete": return s.action_delete()
         if text in ("/new", "/clear"): return s.action_clear()
         if text == "/auto": return s.action_auto()
         if text == "/resume": return s.pick_session()

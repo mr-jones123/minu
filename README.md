@@ -100,3 +100,6 @@ CI builds, smoke-tests the wheel, checks the tag matches the version, and upload
 | `images.py` | attaching images and showing them |
 | `installs.py` | finding tools and their install commands |
 | `widgets.py` | input box, list picker, text prompt |
+
+## License
+MIT, see [LICENSE](LICENSE).

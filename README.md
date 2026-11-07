@@ -3,18 +3,18 @@
 A very small agent harness for local models. One tool (`sh`) and a system prompt of about 86 tokens.
 
 ```
-uv run minu                       # opens the model picker
-uv run minu --hf LiquidAI/LFM3-1.7B-GGUF
-uv run minu --mlx mlx-community/Qwen3-1.7B-4bit
-uv run minu --ollama gemma3:4b
-uv run minu --url http://localhost:8080           # server that's already running
+uv tool install minu              # or: pipx install minu   (needs Python 3.13; uv fetches it for you)
+minu                              # run it in any project folder
 ```
-Install the `minu` command globally (changes to `src/` apply right away):
+Upgrade with `uv tool upgrade minu`, remove with `uv tool uninstall minu`. Sessions are saved in `~/.minu/`.
+
 ```
-git clone https://github.com/mr-jones123/minu && cd minu
-uv tool install -e .
+minu                              # opens the model picker
+minu --hf LiquidAI/LFM3-1.7B-GGUF
+minu --mlx mlx-community/Qwen3-1.7B-4bit
+minu --ollama gemma3:4b
+minu --url http://localhost:8080           # server that's already running
 ```
-Then run `minu` in any project folder. To uninstall: `uv tool uninstall minu`.
 
 `-y` runs commands without asking. `--native` uses the server's tool-call API instead of ```sh blocks.
 
@@ -67,7 +67,25 @@ Search tries DuckDuckGo first, then Wikipedia's API. DuckDuckGo sometimes rate-l
 point minu at your own SearXNG instance: `MINU_SEARXNG=http://localhost:8888`.
 Env: `MINU_CTX` (llama.cpp context, default 16384), `MINU_HOME` (default `~/.minu`), `OLLAMA_HOST`, `HF_HOME`. Server log: `~/.cache/minu/server.log`.
 
-## Code layout (`src/`, installed as the `minu` package)
+## Development
+```
+git clone https://github.com/mr-jones123/minu && cd minu
+uv tool install -e .              # global `minu` that runs your checkout (changes to src/ apply right away)
+uv run minu                       # or run it from the repo
+uv build                          # sdist + wheel into dist/
+```
+
+## Releasing to PyPI
+Publishing runs in GitHub Actions (`.github/workflows/publish.yml`) with PyPI Trusted Publishing, so no token is stored.
+One-time setup: on pypi.org → *Your account → Publishing → Add a pending publisher*: project `minu`,
+owner `mr-jones123`, repo `minu`, workflow `publish.yml`, environment `pypi`. Then for each release:
+```
+uv version --bump patch           # or minor / major; edits pyproject.toml
+git commit -am "release v$(uv version --short)" && git tag v$(uv version --short) && git push --follow-tags
+```
+CI builds, smoke-tests the wheel, checks the tag matches the version, and uploads.
+
+## Code layout (`src/minu/`, the `minu` package)
 | file | what it does |
 |---|---|
 | `cli.py` | command-line flags, plus `minu search` / `minu fetch` for the agent's shell |

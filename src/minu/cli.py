@@ -1,7 +1,7 @@
 """Command line: `minu [--hf|--gguf|--mlx|--ollama|--url ...]`, plus `minu search|fetch` for the agent."""
 import argparse, os, signal, sys
 
-from . import images
+from . import __version__, images
 from .sessions import session_files
 from .tools import fetch, search, shims
 
@@ -12,6 +12,7 @@ def main():
         except Exception as e: print(f"error: {e}"); sys.exit(1)
         return
     ap = argparse.ArgumentParser(prog="minu", description="tiny agent harness for local models")
+    ap.add_argument("-V", "--version", action="version", version=f"minu {__version__}")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--hf", help="HF repo; GGUF -> llama.cpp, mlx -> MLX")
     g.add_argument("--gguf", help="HF GGUF repo or .gguf path (llama.cpp)")
